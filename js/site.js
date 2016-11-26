@@ -14,8 +14,11 @@ var _update = true; // Set to true to call for stage update
 var _canvas, _stage, _drawingCanvas;
 
 var _cursorPt = [0,0];
+var _drawingStroke = false;
 
 var _players = [];
+var _board = [];
+var _reseting = false;
 
 //////////////////////////////////// Initialization ///////////////////////////////////////
 
@@ -48,11 +51,14 @@ function _handleMouseDown (evt) {
 	_cursorPt[1] = _cursorPt[0].clone();
 
 	_stage.addEventListener("stagemousemove", _handleMouseMove);
+	_drawingStroke = true;
 }
 
 function _handleMouseUp (evt) {
 	if (!evt.primary) { return; }
+	_drawingCanvas.graphics.endStroke();
 	_stage.removeEventListener("stagemousemove", _handleMouseMove);
+	_drawingStroke = false;
 }
 
 function _handleMouseMove (evt) {
@@ -60,7 +66,7 @@ function _handleMouseMove (evt) {
 
 	var midPt = new createjs.Point(_cursorPt[0].x + _stage.mouseX >> 1, _cursorPt[0].y + _stage.mouseY >> 1);
 
-	_drawingCanvas.graphics.clear().setStrokeStyle(2, 'round', 'round').beginStroke(_colors[5]).moveTo(midPt.x, midPt.y).curveTo(_cursorPt[0].x, _cursorPt[0].y, _cursorPt[1].x, _cursorPt[1].y);
+	_drawingCanvas.graphics.setStrokeStyle(2, 'round', 'round').beginStroke(_colors[5]).moveTo(midPt.x, midPt.y).curveTo(_cursorPt[0].x, _cursorPt[0].y, _cursorPt[1].x, _cursorPt[1].y);
 
 	_cursorPt[0].x = _stage.mouseX;
 	_cursorPt[0].y = _stage.mouseY;
@@ -93,8 +99,10 @@ function _keyPressed(event) {
 //////////////////////////////////// Update Player Positions ///////////////////////////////////////
 
 function _updatePlayers() {
-	_drawAdvance();
-	_checkBounds();
+	if (!_drawingStroke) {
+		_drawAdvance();
+		_checkGame();
+	}
 }
 
 function _drawAdvance() {
@@ -115,31 +123,63 @@ function _drawAdvance() {
 					break;
 			}
 
-			_drawingCanvas.graphics.beginFill(player.color).drawRect(player.x, player.y, 1, 1);
+			if (_checkMove(player)) {
+				_drawingCanvas.graphics.beginFill(player.color).drawRect(player.x, player.y, 1, 1);
+				_board[player.x][player.y] = index;
+			} else {
+				player.active = false;
+			}
 		}
 	});
 
 	_update = true;
 }
 
-function _checkBounds() {
+function _checkMove(player) {
+	if (player.x < 0 || player.x > _stage.canvas.width || player.y < 0 || player.y > _stage.canvas.height) {
+		return false;
+	}
+
+	if (_board[player.x][player.y] >= 0) {
+		return false;
+	}
+
+	return true;
+}
+
+function _checkGame() {
+	shouldReset = true;
 	_players.forEach(function(player, index) {
 		if (player.active) {
-			if (player.x < 0 || player.x > _stage.canvas.width || player.y < 0 || player.y > _stage.canvas.height) {
-				_players[index].active = false;
-
-				setTimeout(_reset,1800); // Reset after 1.8 seconds
-			}
+			shouldReset = false;
 		}
 	});
+
+	if (shouldReset && !_reseting) {
+		_reseting = true;
+		setTimeout(_reset,1800); // Reset after 1.8 seconds
+	}
 }
 
 //////////////////////////////////// Reset ///////////////////////////////////////
 
 function _reset() {
+	// Create Players
 	_players = [ new Player(10, 10, KEYCODE_RIGHT, _colors[0]) ];
+
+	// Create Board Array
+	_board = new Array(_stage.canvas.width);
+	for (var x = 0; x < _board.length; x++) {
+		_board[x] = new Array(_stage.canvas.height);
+		for (var y = 0; y < _board[x].length; y++) {
+			_board[x][y] = -1;
+		}
+	}
+
+	// Reset Canvas
 	_drawingCanvas.graphics.clear(); // Clear Canvas
 	_update = true;
+	_reseting = false;
 }
 
 //////////////////////////////////// Player Model ///////////////////////////////////////
@@ -150,7 +190,7 @@ function Player(startX, startY, startDir, color) {
    this.dir = startDir;
    this.color = color;
    this.speed = 1;
-   this.active = 1
+   this.active = 1;
 }
 
 //////////////////////////////////// Frame Updates ///////////////////////////////////////
